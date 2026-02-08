@@ -43,10 +43,18 @@ MIDDLEWARE = [
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 
-frontend_url = os.getenv("FRONTEND_URL", "").strip()
+frontend_urls = [
+    url.strip()
+    for url in os.getenv("FRONTEND_URLS", "").split(",")
+    if url.strip()
+]
+if not frontend_urls:
+    frontend_url = os.getenv("FRONTEND_URL", "").strip()
+    if frontend_url:
+        frontend_urls = [frontend_url]
 
-CORS_ALLOWED_ORIGINS = [frontend_url] if frontend_url else []
-CSRF_TRUSTED_ORIGINS = [frontend_url] if frontend_url else []
+CORS_ALLOWED_ORIGINS = frontend_urls
+CSRF_TRUSTED_ORIGINS = frontend_urls
 
 SESSION_COOKIE_SAMESITE = "None"
 SESSION_COOKIE_SECURE = True
