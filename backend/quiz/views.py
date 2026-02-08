@@ -1,8 +1,6 @@
 from decimal import Decimal
 
-from django.contrib.auth import authenticate, get_user_model, login, logout
-from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError
+from django.contrib.auth import authenticate, login, logout
 from django.db.models import Count, F
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -27,6 +25,8 @@ from .serializers import (
     QuestionSerializer,
     QuestionStudentSerializer,
     ResultSerializer,
+    LoginSerializer,
+    SignupSerializer,
     StudentAnswerSerializer,
     StudentExamAttemptSerializer,
     UserProfileSerializer,
@@ -43,8 +43,10 @@ def csrf_token(_request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def login_view(request):
-    username = request.data.get("username")
-    password = request.data.get("password")
+    serializer = LoginSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)  # return 400 on invalid input
+    username = serializer.validated_data["username"]
+    password = serializer.validated_data["password"]
     user = authenticate(request, username=username, password=password)
     if user is None:
         return Response({"detail": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
@@ -58,29 +60,9 @@ def login_view(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def signup_view(request):
-    username = (request.data.get("username") or "").strip()
-    password = request.data.get("password") or ""
-
-    if not username or not password:
-        return Response(
-            {"detail": "Username and password are required."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    User = get_user_model()
-    if User.objects.filter(username=username).exists():
-        return Response(
-            {"detail": "Username already exists."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
-    try:
-        validate_password(password, user=User(username=username))
-    except ValidationError as exc:
-        message = exc.messages[0] if exc.messages else "Invalid password."
-        return Response({"detail": message}, status=status.HTTP_400_BAD_REQUEST)
-
-    user = User.objects.create_user(username=username, password=password)
+    serializer = SignupSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)  # return 400 on invalid input
+    user = serializer.save()
     profile, _ = UserProfile.objects.get_or_create(
         user=user, defaults={"role": UserRole.STUDENT}
     )
