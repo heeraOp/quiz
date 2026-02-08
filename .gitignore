@@ -28,6 +28,12 @@ backend/*.log
 # ===== FRONTEND / VITE =====
 frontend/node_modules/
 frontend/dist/
+frontend/.vite/
+
+# TypeScript build cache
+*.tsbuildinfo
 
 frontend/.env
 frontend/.env.*
+# Generated Vite/TS declarations
+frontend/*.d.ts

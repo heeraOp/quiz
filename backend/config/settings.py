@@ -40,22 +40,21 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 
 frontend_url = os.getenv("FRONTEND_URL", "").strip()
-CORS_ALLOWED_ORIGINS = [frontend_url] if frontend_url else []
 
-CSRF_TRUSTED_ORIGINS = []
-if frontend_url:
-    CSRF_TRUSTED_ORIGINS.append(frontend_url)
-if DEBUG:
-    CSRF_TRUSTED_ORIGINS.extend(
-        [
-            "http://localhost:5173",
-            "http://localhost:5174",
-        ]
-    )
+CORS_ALLOWED_ORIGINS = [frontend_url] if frontend_url else []
+CSRF_TRUSTED_ORIGINS = [frontend_url] if frontend_url else []
+
+SESSION_COOKIE_SAMESITE = "None"
+SESSION_COOKIE_SECURE = True
+
+CSRF_COOKIE_SAMESITE = "None"
+CSRF_COOKIE_SECURE = True
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 
 ROOT_URLCONF = "config.urls"
