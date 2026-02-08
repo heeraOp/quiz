@@ -1,0 +1,33 @@
+# ===== GLOBAL =====
+.DS_Store
+Thumbs.db
+node_modules/
+dist/
+__pycache__/
+staticfiles/
+
+# Virtual environments
+.venv/
+venv/
+
+# Environment variables
+.env
+.env.*
+
+# ===== DJANGO / BACKEND =====
+backend/__pycache__/
+backend/**/*.pyc
+backend/db.sqlite3
+
+backend/staticfiles/
+backend/media/
+
+# Django logs
+backend/*.log
+
+# ===== FRONTEND / VITE =====
+frontend/node_modules/
+frontend/dist/
+
+frontend/.env
+frontend/.env.*
