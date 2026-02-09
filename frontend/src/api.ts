@@ -23,6 +23,19 @@ const apiClient = axios.create({
 apiClient.defaults.xsrfCookieName = "csrftoken";
 apiClient.defaults.xsrfHeaderName = "X-CSRFToken";
 
+// Debug: Log CSRF token before sending requests
+apiClient.interceptors.request.use((config) => {
+  const token = document.cookie
+    .split("; ")
+    .find(row => row.startsWith("csrftoken="))
+    ?.split("=")[1];
+  
+  if (config.method !== "get" && !token) {
+    console.warn("⚠️  CSRF token not found in cookies before POST/PATCH/DELETE request");
+  }
+  return config;
+});
+
 let csrfReady = false;
 let csrfPromise: Promise<void> | null = null;
 

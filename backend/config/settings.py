@@ -182,6 +182,11 @@ if DEBUG:
     if not CSRF_TRUSTED_ORIGINS:
         CSRF_TRUSTED_ORIGINS = ["http://localhost:5173"]
 
+# CSRF: Accept token from both X-CSRFToken header AND form data
+# This ensures compatibility with modern SPAs that send CSRF in headers
+CSRF_HEADER_NAME = "HTTP_X_CSRFTOKEN"
+CSRF_FAILURE_VIEW = "django.views.csrf.csrf_failure"
+
 
 # --------------------------------------------------
 # Cookies / Security
@@ -193,6 +198,16 @@ CSRF_COOKIE_SAMESITE = "None"
 
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
+
+# CRITICAL: Domain must be set for cross-origin cookies to work
+# In production, Render backend needs to send cookies that Netlify frontend can access
+# Leave empty/False in dev to allow localhost
+if not DEBUG:
+    SESSION_COOKIE_DOMAIN = ".onrender.com"  # Allows subdomains
+    CSRF_COOKIE_DOMAIN = ".onrender.com"
+
+# Ensure frontend can read the CSRF cookie
+CSRF_COOKIE_HTTPONLY = False
 
 
 
