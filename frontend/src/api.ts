@@ -70,20 +70,28 @@ export const api = {
   login: async (username: string, password: string) => {
     resetCsrf(); // session change: force fresh CSRF before login
     await ensureCsrf();
-    return request<UserProfile>({
-      url: "/auth/login/",
-      method: "POST",
-      data: { username, password }
-    });
+    try {
+      return await request<UserProfile>({
+        url: "/auth/login/",
+        method: "POST",
+        data: { username, password }
+      });
+    } finally {
+      resetCsrf(); // refresh CSRF after login
+    }
   },
   signup: async (username: string, password: string) => {
     resetCsrf(); // session change: force fresh CSRF before signup
     await ensureCsrf();
-    return request<{ success: boolean; username: string; role: UserProfile["role"] }>({
-      url: "/auth/signup/",
-      method: "POST",
-      data: { username, password }
-    });
+    try {
+      return await request<{ success: boolean; username: string; role: UserProfile["role"] }>({
+        url: "/auth/signup/",
+        method: "POST",
+        data: { username, password }
+      });
+    } finally {
+      resetCsrf(); // refresh CSRF after signup
+    }
   },
   logout: async () => {
     await ensureCsrf();
