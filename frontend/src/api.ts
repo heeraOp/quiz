@@ -1,3 +1,5 @@
+import axios, { AxiosError, AxiosRequestConfig } from "axios";
+
 import type { Attempt, Exam, Question, Result, UserProfile } from "./types";
 
 class ApiError extends Error {
@@ -11,122 +13,146 @@ class ApiError extends Error {
   }
 }
 
-const API_BASE =
-  import.meta.env.VITE_API_URL ?? import.meta.env.VITE_API_BASE ?? "/api";
+const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
 
-const getCookie = (name: string) => {
-  const match = document.cookie.match(new RegExp(`(^|; )${name}=([^;]*)`));
-  return match ? decodeURIComponent(match[2]) : "";
+const apiClient = axios.create({
+  baseURL: API_BASE,
+  withCredentials: true
+});
+
+apiClient.defaults.xsrfCookieName = "csrftoken";
+apiClient.defaults.xsrfHeaderName = "X-CSRFToken";
+
+let csrfReady = false;
+let csrfPromise: Promise<void> | null = null;
+
+const ensureCsrf = async () => {
+  if (csrfReady) {
+    return;
+  }
+  if (!csrfPromise) {
+    csrfPromise = apiClient
+      .get("/auth/csrf/")
+      .then(() => {
+        csrfReady = true;
+      })
+      .catch((error) => {
+        csrfPromise = null;
+        throw error;
+      });
+  }
+  await csrfPromise;
 };
 
-const request = async <T>(
-  path: string,
-  options: RequestInit = {}
-): Promise<T> => {
-  const headers: Record<string, string> = {
-    ...(options.headers as Record<string, string> | undefined)
-  };
-
-  if (!(options.body instanceof FormData)) {
-    headers["Content-Type"] = "application/json";
-  }
-
-  if (options.method && options.method !== "GET") {
-    const csrf = getCookie("csrftoken");
-    if (csrf) {
-      headers["X-CSRFToken"] = csrf;
+const request = async <T>(config: AxiosRequestConfig): Promise<T> => {
+  try {
+    const response = await apiClient.request<T>(config);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const axiosError = error as AxiosError<any>;
+      const status = axiosError.response?.status ?? 0;
+      const data = axiosError.response?.data;
+      const message = data?.detail || axiosError.message || "Request failed";
+      throw new ApiError(message, status, data);
     }
+    throw error;
   }
-
-  const response = await fetch(`${API_BASE}${path}`, {
-    credentials: "include",
-    ...options,
-    headers
-  });
-
-  const text = await response.text();
-  let data: any = null;
-  if (text) {
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { detail: text };
-    }
-  }
-
-  if (!response.ok) {
-    const message = data?.detail || "Request failed";
-    throw new ApiError(message, response.status, data);
-  }
-
-  return data as T;
 };
 
 export const api = {
-  csrf: () => request<{ detail: string }>("/auth/csrf/"),
-  login: (username: string, password: string) =>
-    request<UserProfile>("/auth/login/", {
+  csrf: () => request<{ detail: string }>({ url: "/auth/csrf/", method: "GET" }),
+  login: async (username: string, password: string) => {
+    await ensureCsrf(); // ensure CSRF cookie before login
+    return request<UserProfile>({
+      url: "/auth/login/",
       method: "POST",
-      body: JSON.stringify({ username, password })
-    }),
-  signup: (username: string, password: string) =>
-    request<{ success: boolean; username: string; role: UserProfile["role"] }>(
-      "/auth/signup/",
-      {
-        method: "POST",
-        body: JSON.stringify({ username, password })
-      }
-    ),
-  logout: () => request<{ detail: string }>("/auth/logout/", { method: "POST" }),
-  me: () => request<UserProfile>("/auth/me/"),
-  listExams: () => request<Exam[]>("/exams/"),
-  deleteExam: (examId: number) =>
-    request<void>(`/exams/${examId}/`, { method: "DELETE" }),
-  createExam: (payload: {
+      data: { username, password }
+    });
+  },
+  signup: async (username: string, password: string) => {
+    await ensureCsrf(); // ensure CSRF cookie before signup
+    return request<{ success: boolean; username: string; role: UserProfile["role"] }>({
+      url: "/auth/signup/",
+      method: "POST",
+      data: { username, password }
+    });
+  },
+  logout: async () => {
+    await ensureCsrf(); // ensure CSRF cookie before logout
+    return request<{ detail: string }>({ url: "/auth/logout/", method: "POST" });
+  },
+  me: () => request<UserProfile>({ url: "/auth/me/", method: "GET" }),
+  listExams: () => request<Exam[]>({ url: "/exams/", method: "GET" }),
+  deleteExam: async (examId: number) => {
+    await ensureCsrf();
+    return request<void>({ url: `/exams/${examId}/`, method: "DELETE" });
+  },
+  createExam: async (payload: {
     title: string;
     exam_code: string;
     negative_marking_enabled: boolean;
     negative_marks: number;
-  }) =>
-    request<Exam>("/exams/", { method: "POST", body: JSON.stringify(payload) }),
-  updateExamSettings: (
+  }) => {
+    await ensureCsrf();
+    return request<Exam>({ url: "/exams/", method: "POST", data: payload });
+  },
+  updateExamSettings: async (
     examId: number,
     payload: {
       is_active?: boolean;
       negative_marking_enabled?: boolean;
       negative_marks?: number;
     }
-  ) =>
-    request<Exam>(`/exams/${examId}/status/`, {
+  ) => {
+    await ensureCsrf();
+    return request<Exam>({
+      url: `/exams/${examId}/status/`,
       method: "PATCH",
-      body: JSON.stringify(payload)
-    }),
+      data: payload
+    });
+  },
   listQuestions: (examId: number) =>
-    request<Question[]>(`/exams/${examId}/questions/`),
-  addQuestion: (examId: number, payload: Omit<Question, "id">) =>
-    request<Question>(`/exams/${examId}/questions/`, {
+    request<Question[]>({ url: `/exams/${examId}/questions/`, method: "GET" }),
+  addQuestion: async (examId: number, payload: Omit<Question, "id">) => {
+    await ensureCsrf();
+    return request<Question>({
+      url: `/exams/${examId}/questions/`,
       method: "POST",
-      body: JSON.stringify(payload)
-    }),
+      data: payload
+    });
+  },
   getResults: (examId: number) =>
-    request<Result[]>(`/exams/${examId}/results/`),
-  joinExam: (exam_code: string) =>
-    request<Attempt>("/exams/join/", {
+    request<Result[]>({ url: `/exams/${examId}/results/`, method: "GET" }),
+  joinExam: async (exam_code: string) => {
+    await ensureCsrf();
+    return request<Attempt>({
+      url: "/exams/join/",
       method: "POST",
-      body: JSON.stringify({ exam_code })
-    }),
+      data: { exam_code }
+    });
+  },
   getAttemptQuestions: (attemptId: number) =>
-    request<Question[]>(`/attempts/${attemptId}/questions/`),
-  submitAttempt: (
+    request<Question[]>({
+      url: `/attempts/${attemptId}/questions/`,
+      method: "GET"
+    }),
+  submitAttempt: async (
     attemptId: number,
     answers: { question: number; selected_option: string }[]
-  ) =>
-    request<Result>(`/attempts/${attemptId}/submit/`, {
+  ) => {
+    await ensureCsrf();
+    return request<Result>({
+      url: `/attempts/${attemptId}/submit/`,
       method: "POST",
-      body: JSON.stringify({ answers })
-    }),
+      data: { answers }
+    });
+  },
   getAttemptResult: (attemptId: number) =>
-    request<Result>(`/attempts/${attemptId}/result/`)
+    request<Result>({
+      url: `/attempts/${attemptId}/result/`,
+      method: "GET"
+    })
 };
 
 export { ApiError };
