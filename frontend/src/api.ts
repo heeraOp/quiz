@@ -26,6 +26,11 @@ apiClient.defaults.xsrfHeaderName = "X-CSRFToken";
 let csrfReady = false;
 let csrfPromise: Promise<void> | null = null;
 
+const resetCsrf = () => {
+  csrfReady = false;
+  csrfPromise = null;
+};
+
 const ensureCsrf = async () => {
   if (csrfReady) {
     return;
@@ -63,7 +68,8 @@ const request = async <T>(config: AxiosRequestConfig): Promise<T> => {
 export const api = {
   csrf: () => request<{ detail: string }>({ url: "/auth/csrf/", method: "GET" }),
   login: async (username: string, password: string) => {
-    await ensureCsrf(); // ensure CSRF cookie before login
+    resetCsrf(); // session change: force fresh CSRF before login
+    await ensureCsrf();
     return request<UserProfile>({
       url: "/auth/login/",
       method: "POST",
@@ -71,7 +77,8 @@ export const api = {
     });
   },
   signup: async (username: string, password: string) => {
-    await ensureCsrf(); // ensure CSRF cookie before signup
+    resetCsrf(); // session change: force fresh CSRF before signup
+    await ensureCsrf();
     return request<{ success: boolean; username: string; role: UserProfile["role"] }>({
       url: "/auth/signup/",
       method: "POST",
@@ -79,8 +86,12 @@ export const api = {
     });
   },
   logout: async () => {
-    await ensureCsrf(); // ensure CSRF cookie before logout
-    return request<{ detail: string }>({ url: "/auth/logout/", method: "POST" });
+    await ensureCsrf();
+    try {
+      return await request<{ detail: string }>({ url: "/auth/logout/", method: "POST" });
+    } finally {
+      resetCsrf(); // session change: clear CSRF after logout
+    }
   },
   me: () => request<UserProfile>({ url: "/auth/me/", method: "GET" }),
   listExams: () => request<Exam[]>({ url: "/exams/", method: "GET" }),
